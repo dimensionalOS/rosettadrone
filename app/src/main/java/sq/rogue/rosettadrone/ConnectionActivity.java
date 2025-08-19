@@ -124,7 +124,10 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
 
         if (missingPermission.isEmpty()) {
             Log.d(TAG, "No missingPermission");
-            RDApplication.startLoginApplication();
+            // Prevent multiple registration attempts
+            if (isRegistrationInProgress.compareAndSet(false, true)) {
+                RDApplication.startLoginApplication();
+            }
         }
         else{
             String[] x = missingPermission.toArray(new String[missingPermission.size()]);

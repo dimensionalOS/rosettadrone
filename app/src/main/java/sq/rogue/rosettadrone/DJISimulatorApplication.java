@@ -157,10 +157,16 @@ public class DJISimulatorApplication extends Application {
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || (permissionCheck == 0 && permissionCheck2 == 0)) {
             //This is used to start SDK services and initiate SDK.
-            DJISDKManager x = DJISDKManager.getInstance();
-            Context y = getApplicationContext();
-            x.registerApp(y, mDJISDKManagerCallback);
-            Toast.makeText(getApplicationContext(), "Registering, please wait.", Toast.LENGTH_LONG).show();
+            // Add delay to ensure proper initialization
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    DJISDKManager x = DJISDKManager.getInstance();
+                    Context y = getApplicationContext();
+                    x.registerApp(y, mDJISDKManagerCallback);
+                    Toast.makeText(getApplicationContext(), "Registering, please wait...", Toast.LENGTH_LONG).show();
+                }
+            }, 1000);
         } else {
             Toast.makeText(getApplicationContext(), "Please check if the permission is granted.", Toast.LENGTH_LONG).show();
         }

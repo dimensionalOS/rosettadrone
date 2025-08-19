@@ -777,7 +777,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         requestDroneLocation();
 
-        DJISDKManager.getInstance().registerApp(this, mDJISDKManagerCallback);
+        // FIXED: Removed duplicate registration - already done in DJISimulatorApplication
+        // DJISDKManager.getInstance().registerApp(this, mDJISDKManagerCallback);
 
         // SafeMode button
         mBtnSafety = findViewById(R.id.btn_safety);

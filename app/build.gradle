@@ -8,8 +8,8 @@ android {
     compileSdkVersion 33
     defaultConfig {
         applicationId "sq.rogue.rosettadrone"
-        minSdkVersion 24
-        targetSdkVersion 33
+        minSdkVersion 21
+        targetSdkVersion 30
         versionCode 1
         versionName '5.2.0'    // This is the one to modify...
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -103,7 +103,7 @@ android {
 
     // We need to be restrict as we get error on newer versions...
     //   buildToolsVersion '30.0.2'
-    ndkVersion '22.0.7026061'
+    ndkVersion '21.4.7075529'
    android {
         lintOptions {
             abortOnError false //Required, due to lack of support of gradle 7
