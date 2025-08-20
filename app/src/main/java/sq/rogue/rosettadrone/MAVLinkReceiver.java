@@ -311,6 +311,9 @@ public class MAVLinkReceiver {
                             case MAVLINK_MSG_ID_HOME_POSITION:
                                 mModel.send_home_position();
                                 break;
+                            case 269: // MAVLINK_MSG_ID_VIDEO_STREAM_INFORMATION
+                                mModel.send_video_stream_information();
+                                break;
                             default:
                                 /*
                                 msg_message_interval m = new msg_message_interval();

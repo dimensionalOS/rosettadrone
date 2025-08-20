@@ -30,6 +30,7 @@ import com.MAVLink.common.msg_statustext;
 import com.MAVLink.common.msg_sys_status;
 import com.MAVLink.common.msg_vfr_hud;
 import com.MAVLink.common.msg_vibration;
+import com.MAVLink.common.msg_video_stream_information;
 import com.MAVLink.enums.GPS_FIX_TYPE;
 import com.MAVLink.enums.MAV_AUTOPILOT;
 import com.MAVLink.enums.MAV_CMD;
@@ -761,6 +762,7 @@ public class DroneModel implements CommonCallbacks.CompletionCallback {
                 send_sys_status();
                 send_power_status();
                 send_battery_status();
+                send_video_stream_information();
             }
             if (ticks % 5000 == 0) {
                 send_home_position();
@@ -1296,6 +1298,34 @@ public class DroneModel implements CommonCallbacks.CompletionCallback {
         //     Log.d(TAG, "temp: " + String.valueOf(mBatteryTemp_C));
         //      Log.d(TAG, "send_battery_status() complete");
         // TODO cell voltages
+        sendMessage(msg);
+    }
+
+    public void send_video_stream_information() {
+        msg_video_stream_information msg = new msg_video_stream_information();
+        msg.stream_id = 1;
+        msg.count = 1;
+        msg.type = 1; // UDP streaming
+        msg.flags = 1; // VIDEO_STREAM_STATUS_FLAGS_RUNNING
+        msg.framerate = 30.0f;
+        msg.resolution_h = 1920;
+        msg.resolution_v = 1080;
+        msg.bitrate = 2000000; // 2 Mbps
+        msg.rotation = 0;
+        msg.hfov = 90;
+        
+        // Set stream name
+        String streamName = "DJI Camera Stream";
+        byte[] nameBytes = streamName.getBytes();
+        System.arraycopy(nameBytes, 0, msg.name, 0, Math.min(nameBytes.length, 32));
+        
+        // Set URI - using the video port configured in settings
+        String videoIP = parent.getVideoIP();
+        int videoPort = parent.videoPort;
+        String uri = "udp://" + videoIP + ":" + videoPort;
+        byte[] uriBytes = uri.getBytes();
+        System.arraycopy(uriBytes, 0, msg.uri, 0, Math.min(uriBytes.length, 160));
+        
         sendMessage(msg);
     }
 

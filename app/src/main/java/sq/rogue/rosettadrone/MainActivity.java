@@ -190,7 +190,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     public boolean useOutputSurface = true; // Can be disabled by a video plugin
     private boolean mExternalVideoOut = true;
     private String mvideoIPString;
-    private int videoPort;
+    public int videoPort;
     private int mVideoBitrate = 2;
     private int mEncodeSpeed = 2;
     private VideoService videoService = null;
@@ -277,8 +277,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         String gcsAddress;
         if (sharedPreferences.getBoolean("pref_external_gcs", false)) {
             gcsAddress = sharedPreferences.getString("pref_gcs_ip", "127.0.0.1");
+            Log.d(TAG, "Using external GCS IP: " + gcsAddress);
         } else {
             gcsAddress = "127.0.0.1";
+            Log.d(TAG, "Using local GCS IP: " + gcsAddress);
         }
 
         return gcsAddress;
@@ -807,6 +809,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         } else {
             setSafeMode(true);
+            // Check if drone is already connected and start MAVLink if so
+            if (mProduct != null && mProduct.isConnected() && mProduct instanceof Aircraft) {
+                logMessageDJI("Drone already connected, starting MAVLink");
+                onDroneConnected();
+            }
         }
     }
 
@@ -1566,7 +1573,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private void sendDroneDisconnected() {
     }
 
-    private String getVideoIP() {
+    public String getVideoIP() {
         String videoIP;
         if (sharedPreferences.getBoolean("pref_separate_gcs", false)) {
             // Separate video from GCS IP
