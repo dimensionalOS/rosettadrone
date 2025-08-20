@@ -19,15 +19,21 @@ public class MAVLinkConnection {
             Log.e(TAG, "Connecting to " + host + ":" + port);
             socket = new DatagramSocket();
             socket.connect(InetAddress.getByName(host), port);
-            //socket.setSoTimeout(10);
+            socket.setSoTimeout(100); // 100ms timeout to prevent blocking forever
+            Log.d(TAG, "Socket connected to " + host + ":" + port + ", local port: " + socket.getLocalPort());
 
         } catch (SocketException | UnknownHostException e) {
+            Log.e(TAG, "Failed to create socket", e);
             e.printStackTrace();
         }
     }
 
     public void send(byte[] bytes) throws IOException {
         socket.send(new DatagramPacket(bytes, bytes.length, socket.getInetAddress(), socket.getPort()));
+        // Log occasionally to avoid spam
+        if (Math.random() < 0.01) {
+            Log.v(TAG, "Sent " + bytes.length + " bytes to " + socket.getInetAddress() + ":" + socket.getPort());
+        }
     }
 
     public void close() {

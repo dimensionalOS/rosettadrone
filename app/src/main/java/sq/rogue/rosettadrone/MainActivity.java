@@ -1754,9 +1754,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                         byte[] buf = new byte[1000];
                         DatagramPacket dp = new DatagramPacket(buf, buf.length);
 
-                        // Listen on random src port
-                        //this.mainActivity.mMavlinkReceiver.mavLinkConnections.get(0).socket.receive(dp);
-                        connection.socket.receive(dp);
+                        // Listen on the socket
+                        try {
+                            connection.socket.receive(dp);
+                        } catch (java.net.SocketTimeoutException e) {
+                            // Timeout is expected, just continue to check for other events
+                            continue;
+                        }
 
                         if(close) {
                             Log.i(TAG, "Listener closed");

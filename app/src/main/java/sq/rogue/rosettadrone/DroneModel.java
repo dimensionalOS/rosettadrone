@@ -810,7 +810,10 @@ public class DroneModel implements CommonCallbacks.CompletionCallback {
     }
 
     public void sendMessage(MAVLinkMessage msg) {
-        if (parent.mMavlinkReceiver.mavLinkConnections.isEmpty()) return;
+        if (parent.mMavlinkReceiver.mavLinkConnections.isEmpty()) {
+            Log.w(TAG, "No MAVLink connections available, cannot send message");
+            return;
+        }
 
         MAVLinkPacket packet = msg.pack();
 
@@ -823,11 +826,16 @@ public class DroneModel implements CommonCallbacks.CompletionCallback {
             try {
                 mavLinkConnection.send(bytes);
                 parent.logMessageToGCS(msg.toString());
+                
+                // Debug log every 10th message to avoid spam
+                if (ticks % 1000 == 0) {
+                    Log.d(TAG, "Sent MAVLink message type: " + msg.getClass().getSimpleName());
+                }
 
-            } catch (PortUnreachableException ignored) {
-
+            } catch (PortUnreachableException e) {
+                Log.w(TAG, "Port unreachable for MAVLink message");
             } catch (IOException e) {
-
+                Log.e(TAG, "Failed to send MAVLink message", e);
             }
         }
     }
