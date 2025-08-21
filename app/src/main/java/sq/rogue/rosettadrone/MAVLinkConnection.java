@@ -11,16 +11,21 @@ import java.net.UnknownHostException;
 
 public class MAVLinkConnection {
     DatagramSocket socket;
+    InetAddress gcsAddress;
+    int gcsPort;
     MainActivity.GCSCommunicatorAsyncTask.Listener listener;
     private final String TAG = this.getClass().getSimpleName();
 
     public MAVLinkConnection(String host, int port) {
         try {
-            Log.e(TAG, "Connecting to " + host + ":" + port);
-            socket = new DatagramSocket();
-            socket.connect(InetAddress.getByName(host), port);
+            Log.e(TAG, "Creating bidirectional connection to " + host + ":" + port);
+            // Bind to port 14550 to receive commands from GCS
+            socket = new DatagramSocket(14550);
+            // Store GCS address for sending
+            gcsAddress = InetAddress.getByName(host);
+            gcsPort = port;
             socket.setSoTimeout(100); // 100ms timeout to prevent blocking forever
-            Log.d(TAG, "Socket connected to " + host + ":" + port + ", local port: " + socket.getLocalPort());
+            Log.d(TAG, "Socket bound to port 14550 for receiving, will send to " + host + ":" + port);
 
         } catch (SocketException | UnknownHostException e) {
             Log.e(TAG, "Failed to create socket", e);
@@ -29,10 +34,10 @@ public class MAVLinkConnection {
     }
 
     public void send(byte[] bytes) throws IOException {
-        socket.send(new DatagramPacket(bytes, bytes.length, socket.getInetAddress(), socket.getPort()));
+        socket.send(new DatagramPacket(bytes, bytes.length, gcsAddress, gcsPort));
         // Log occasionally to avoid spam
         if (Math.random() < 0.01) {
-            Log.v(TAG, "Sent " + bytes.length + " bytes to " + socket.getInetAddress() + ":" + socket.getPort());
+            Log.v(TAG, "Sent " + bytes.length + " bytes to " + gcsAddress + ":" + gcsPort);
         }
     }
 
