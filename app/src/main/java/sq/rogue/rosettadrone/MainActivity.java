@@ -90,7 +90,9 @@ import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.preference.PreferenceManager;
 import dji.common.camera.SettingsDefinitions;
+import dji.common.camera.ResolutionAndFrameRate;
 import dji.common.error.DJIError;
+import dji.sdk.camera.Camera;
 import dji.common.error.DJISDKError;
 import dji.common.flightcontroller.LocationCoordinate3D;
 import dji.common.mission.waypoint.Waypoint;
@@ -290,12 +292,18 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
      * Reads the settings and binds the VideoService
      */
     private void initVideoService() {
-        if(!useCustomDecoder) return;
+        Log.e(TAG, "VIDEO_DEBUG: initVideoService() called, useCustomDecoder=" + useCustomDecoder);
+        if(!useCustomDecoder) {
+            Log.e(TAG, "VIDEO_DEBUG: useCustomDecoder is false, returning");
+            return;
+        }
 
         Log.e(TAG, "initVideoService");
 
         mvideoIPString = getVideoIP();
-        Log.e(TAG, "IP Address: " + mvideoIPString);
+        Log.e(TAG, "VIDEO_DEBUG: Video IP Address: " + mvideoIPString);
+        Log.e(TAG, "VIDEO_DEBUG: pref_separate_gcs=" + sharedPreferences.getBoolean("pref_separate_gcs", false));
+        Log.e(TAG, "VIDEO_DEBUG: pref_video_ip=" + sharedPreferences.getString("pref_video_ip", "127.0.0.1"));
 
         videoPort = Integer.parseInt(Objects.requireNonNull(sharedPreferences.getString("pref_video_port", "5600")));
         mVideoBitrate = Integer.parseInt(Objects.requireNonNull(sharedPreferences.getString("pref_video_bitrate", "2")));
@@ -316,8 +324,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         // class name because we want a specific service implementation that
         // we know will be running in our own process (and thus won't be
         // supporting component replacement by other applications).
-        Log.e(TAG, "doBindService");
-        bindService(new Intent(this, VideoService.class), mConnection, Context.BIND_AUTO_CREATE);
+        Log.e(TAG, "VIDEO_DEBUG: doBindService - binding VideoService");
+        boolean bound = bindService(new Intent(this, VideoService.class), mConnection, Context.BIND_AUTO_CREATE);
+        Log.e(TAG, "VIDEO_DEBUG: VideoService bind result: " + bound);
         mIsBound = true;
 
         mIsTranscodedVideoFeedNeeded = isTranscodedVideoFeedNeeded();
@@ -333,7 +342,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         @Override
         public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
-            Log.e(TAG, "onServiceConnected  " + mvideoIPString);
+            // Always get fresh IP when service connects
+            mvideoIPString = getVideoIP();
+            Log.e(TAG, "VIDEO_DEBUG: onServiceConnected with video IP: " + mvideoIPString);
             videoService = ((VideoService.LocalBinder) iBinder).getInstance();
             videoService.setParameters(mvideoIPString, videoPort, mVideoBitrate, mEncodeSpeed);
 
@@ -383,6 +394,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     void resumeVideo() {
         mExternalVideoOut = prefs.getBoolean("pref_enable_video", true);
+        Log.d(TAG, "VIDEO_DEBUG: mExternalVideoOut set to " + mExternalVideoOut);
 
         // We should rather use multicast...
         if (videoService != null) {
@@ -402,6 +414,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                             standardVideoFeeder.removeVideoDataListener(listener);
                         }
                         standardVideoFeeder.addVideoDataListener(mReceivedVideoDataListener);
+                        Log.d(TAG, "VIDEO_DEBUG: Added video listener to standardVideoFeeder");
                     }
                 } else {
                     final VideoFeeder.VideoFeed videoFeed = VideoFeeder.getInstance().getPrimaryVideoFeed();
@@ -409,6 +422,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                         videoFeed.removeVideoDataListener(listener);
                     }
                     videoFeed.addVideoDataListener(mReceivedVideoDataListener);
+                    Log.d(TAG, "VIDEO_DEBUG: Added video listener to primary video feed");
                 }
             } else {
                 if (mIsTranscodedVideoFeedNeeded) {
@@ -768,6 +782,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
 
         videostreamPreviewTtView = findViewById(R.id.livestream_preview_ttv);
+        
+        // Add click listener to manually trigger video initialization
+        videostreamPreviewTtView.setOnClickListener(v -> {
+            logMessageDJI("Manual video initialization triggered");
+            Log.e(TAG, "VIDEO_DEBUG: Manual video init clicked");
+            initializeVideoFeed();
+        });
 
         deleteApplicationDirectory();
         initLogs();
@@ -801,6 +822,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mBtnRTH.setOnClickListener(v -> mModel.doReturnToLaunch());
 
         pluginManager.start();
+        
+        // Create video listener BEFORE onDroneConnected might be called
+        createVideoListener();
 
         if(RDApplication.isTestMode) {
             setSafeMode(false);
@@ -815,6 +839,44 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 onDroneConnected();
             }
         }
+    }
+    
+    private void createVideoListener() {
+        // Set callback for receiving the raw H264 video data from the camera
+        Log.e(TAG, "VIDEO_DEBUG: Creating mReceivedVideoDataListener");
+        mReceivedVideoDataListener = (videoBuffer, size) -> {
+            // Log video data reception
+            if (Math.random() < 0.01) { // Log occasionally to avoid spam
+                Log.e(TAG, "VIDEO_DEBUG: Received video data from DJI, size=" + size + ", mExternalVideoOut=" + mExternalVideoOut);
+            }
+            
+            int parserMode;
+            if (m_videoMode == 2) {
+                parserMode = 0;
+
+                if (mCodecManager != null) {
+                    // Render on screen
+                    mCodecManager.sendDataToDecoder(videoBuffer, size);
+                    if (mPrevVideoBufferSize != size && videostreamPreviewTtView.getSurfaceTexture() != null) {
+                        mPrevVideoBufferSize = size;
+                        mSurfaceTextureListener.onSurfaceTextureSizeChanged(videostreamPreviewTtView.getSurfaceTexture(), videostreamPreviewTtView.getWidth(), videostreamPreviewTtView.getHeight());
+                    }
+                }
+
+            } else {
+                parserMode = 1;
+            }
+
+            // Send the raw DJI H264 data to the JNI ffmpeg decoder --> NAL splitter --> RtpSocket
+            if (mExternalVideoOut == true) {
+                if (Math.random() < 0.01) { // Log occasionally
+                    Log.d(TAG, "VIDEO_DEBUG: Sending to NativeHelper.parse(), size=" + size + ", parserMode=" + parserMode);
+                }
+                NativeHelper.getInstance().parse(videoBuffer, size, parserMode);
+            } else {
+                Log.w(TAG, "VIDEO_DEBUG: mExternalVideoOut is false, not sending video!");
+            }
+        };
     }
 
     private void setSafeMode(boolean enabled) {
@@ -856,31 +918,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             Log.e(TAG, "Video out 2: ");
         }
 
-        // Set callback for receiving the raw H264 video data from the camera
-        mReceivedVideoDataListener = (videoBuffer, size) -> {
-            int parserMode;
-            if (m_videoMode == 2) {
-                parserMode = 0;
-
-                if (mCodecManager != null) {
-                    // Render on screen
-                    mCodecManager.sendDataToDecoder(videoBuffer, size);
-                    if (mPrevVideoBufferSize != size && videostreamPreviewTtView.getSurfaceTexture() != null) {
-                        mPrevVideoBufferSize = size;
-                        mSurfaceTextureListener.onSurfaceTextureSizeChanged(videostreamPreviewTtView.getSurfaceTexture(), videostreamPreviewTtView.getWidth(), videostreamPreviewTtView.getHeight());
-                    }
-                }
-
-            } else {
-                parserMode = 1;
-            }
-
-            // Send the raw DJI H264 data to the JNI ffmpeg decoder --> NAL splitter --> RtpSocket
-            if (mExternalVideoOut == true) {
-                NativeHelper.getInstance().parse(videoBuffer, size, parserMode);
-            }
-        };
-
+        // Video listener is now created earlier in createVideoListener()
+        
         if (mProduct == null || !mProduct.isConnected()) {
             mModel.m_camera = null;
 
@@ -888,7 +927,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             m_videoMode = getVideoMode(mProduct.getModel());
 
             if (!mProduct.getModel().equals(Model.UNKNOWN_AIRCRAFT)) {
-                if (mModel.m_camera != null) {
+                // Don't set camera to photo mode if we need external video
+                if (mModel.m_camera != null && !mExternalVideoOut) {
                     mModel.m_camera.setMode(SettingsDefinitions.CameraMode.SHOOT_PHOTO, djiError -> {
                         if (djiError != null) {
                             Log.e(TAG, "can't change mode of camera, error: " + djiError.getDescription());
@@ -1432,18 +1472,29 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void onDroneConnected() {
+        Log.e(TAG, "VIDEO_DEBUG: onDroneConnected() called");
+        logMessageDJI("onDroneConnected() called");
+        
+        // Start MAVLink first - this always needs to run
+        mGCSCommunicator = new GCSCommunicatorAsyncTask(this);
+        mGCSCommunicator.execute();
+        
+        // Initialize video even if battery is null - video can still work
+        Log.e(TAG, "VIDEO_DEBUG: Scheduling video init in 2 seconds");
+        new Handler().postDelayed(() -> {
+            Log.e(TAG, "VIDEO_DEBUG: Delayed video init triggered");
+            initializeVideoFeed();
+        }, 2000);
+        
         if (mProduct.getModel() == null) {
             logMessageDJI("Aircraft is not on!");
             return;
         }
 
         if (mProduct.getBattery() == null) {
-            logMessageDJI("Reconnect your android device to the RC for full functionality.");
-            return;
+            logMessageDJI("Reconnect your android device to the RC for full functionality (battery info unavailable).");
+            // Don't return - continue with limited functionality
         }
-
-        mGCSCommunicator = new GCSCommunicatorAsyncTask(this);
-        mGCSCommunicator.execute();
 
         // Multiple tries and a timeout are necessary because of a bug that causes all the
         // components of mProduct to be null sometimes.
@@ -1466,7 +1517,93 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             safeSleep(100);
         }
         sendDroneConnected();
+        finishDroneConnection();
+        Log.e(TAG, "VIDEO_DEBUG: onDroneConnected() finished");
+    }
+    
+    private void initializeVideoFeed() {
+        // Initialize video feed listener and ensure video service has correct IP
+        logMessageDJI("Initializing video feed listener...");
+        Log.e(TAG, "VIDEO_DEBUG: initializeVideoFeed() called, mExternalVideoOut=" + mExternalVideoOut);
+        Log.e(TAG, "VIDEO_DEBUG: videoService=" + videoService);
+        Log.e(TAG, "VIDEO_DEBUG: mReceivedVideoDataListener=" + mReceivedVideoDataListener);
+        
+        if (mExternalVideoOut) {
+            // Re-initialize video service with correct IP
+            if (videoService != null) {
+                mvideoIPString = getVideoIP(); // Get current video IP
+                Log.e(TAG, "VIDEO_DEBUG: Got video IP: " + mvideoIPString);
+                logMessageDJI("Updating video service with IP: " + mvideoIPString);
+                videoService.setParameters(mvideoIPString, videoPort, mVideoBitrate, mEncodeSpeed);
+            } else {
+                Log.e(TAG, "VIDEO_DEBUG: videoService is NULL - service not bound yet!");
+            }
+            
+            // CRITICAL FIX: Set camera to VIDEO mode for Mavic 2 Pro
+            if (mProduct != null && mProduct.getCamera() != null) {
+                Log.e(TAG, "VIDEO_DEBUG: Setting camera to VIDEO mode for streaming");
+                mProduct.getCamera().setMode(SettingsDefinitions.CameraMode.RECORD_VIDEO, djiError -> {
+                    if (djiError != null) {
+                        Log.e(TAG, "VIDEO_DEBUG: Error setting camera to video mode: " + djiError.getDescription());
+                        logMessageDJI("Error setting video mode: " + djiError.getDescription());
+                    } else {
+                        Log.e(TAG, "VIDEO_DEBUG: Camera set to video mode successfully");
+                        logMessageDJI("Camera set to video mode");
+                        
+                        // Create codec manager AFTER camera is in video mode
+                        if (mCodecManager == null) {
+                            Log.e(TAG, "VIDEO_DEBUG: Creating codec manager to trigger video stream");
+                            // This is required for DJI SDK to start sending video data
+                            mCodecManager = new DJICodecManager(getApplicationContext(), (SurfaceTexture)null, 1920, 1080);
+                            Log.e(TAG, "VIDEO_DEBUG: Codec manager created");
+                        }
+                    }
+                });
+            }
+            
+            try {
+                VideoFeeder videoFeeder = VideoFeeder.getInstance();
+                Log.e(TAG, "VIDEO_DEBUG: VideoFeeder instance: " + videoFeeder);
+                if (videoFeeder != null) {
+                    // For Mavic 2 Pro, we should use getTranscodedVideoFeed
+                    VideoFeeder.VideoFeed videoFeed = null;
+                    if (mProduct != null && (mProduct.getModel() == Model.MAVIC_2_PRO || mProduct.getModel() == Model.MAVIC_2_ZOOM)) {
+                        Log.e(TAG, "VIDEO_DEBUG: Using transcoded video feed for Mavic 2");
+                        videoFeed = videoFeeder.provideTranscodedVideoFeed();
+                    } else {
+                        videoFeed = videoFeeder.getPrimaryVideoFeed();
+                    }
+                    
+                    Log.e(TAG, "VIDEO_DEBUG: Video feed: " + videoFeed);
+                    if (videoFeed != null) {
+                        // Remove existing listeners
+                        for (VideoFeeder.VideoDataListener listener : videoFeed.getListeners()) {
+                            videoFeed.removeVideoDataListener(listener);
+                        }
+                        // Register our listener
+                        videoFeed.addVideoDataListener(mReceivedVideoDataListener);
+                        Log.e(TAG, "VIDEO_DEBUG: Added video listener to video feed");
+                        logMessageDJI("Registered video listener");
+                    } else {
+                        Log.e(TAG, "VIDEO_DEBUG: Video feed is NULL!");
+                        logMessageDJI("Video feed not available");
+                    }
+                } else {
+                    Log.e(TAG, "VIDEO_DEBUG: VideoFeeder is NULL!");
+                    logMessageDJI("VideoFeeder not available");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "VIDEO_DEBUG: Error initializing video feed", e);
+                logMessageDJI("Error initializing video: " + e.getMessage());
+            }
+        } else {
+            Log.e(TAG, "VIDEO_DEBUG: mExternalVideoOut is false, not initializing video");
+        }
+        
+        Log.e(TAG, "VIDEO_DEBUG: initializeVideoFeed() completed");
+    }
 
+    private void finishDroneConnection() {
         final Drawable connectedDrawable = getResources().getDrawable(R.drawable.ic_baseline_connected_24px, null);
         runOnUiThread(() -> {
             ImageView djiImageView = findViewById(R.id.dji_conn);

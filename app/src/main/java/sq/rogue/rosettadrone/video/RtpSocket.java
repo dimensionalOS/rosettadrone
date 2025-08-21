@@ -196,11 +196,12 @@ public class RtpSocket implements Runnable {
                 mTransport = TRANSPORT_UDP;
             }
             mPort = dport;
-            Log.d(TAG, "setDestination: " + dest + ":" + dport);
+            Log.d(TAG, "VIDEO_DEBUG: RtpSocket.setDestination: " + dest.getHostAddress() + ":" + dport + " (rtcp:" + rtcpPort + ")");
             for (int i = 0; i < mBufferCount; i++) {
                 mPackets[i].setPort(dport);
                 mPackets[i].setAddress(dest);
             }
+            Log.d(TAG, "VIDEO_DEBUG: Configured " + mBufferCount + " DatagramPackets for " + dest.getHostAddress() + ":" + dport);
             mReport.setDestination(dest, rtcpPort);
         }
     }
@@ -335,6 +336,11 @@ public class RtpSocket implements Runnable {
                             mPackets[mBufferOut].setPort(mPort + 1);
                             mSocketUDP2.send(mPackets[mBufferOut]);
                         } else {
+                            if (Math.random() < 0.001) { // Log occasionally
+                                Log.e(TAG, "VIDEO_DEBUG: SENDING UDP PACKET TO " + 
+                                      mPackets[mBufferOut].getAddress().getHostAddress() + ":" + 
+                                      mPackets[mBufferOut].getPort() + ", size=" + mPackets[mBufferOut].getLength());
+                            }
                             mSocketUDP.send(mPackets[mBufferOut]);
                         }
                     } else if (mTransport == TRANSPORT_MULTICAST) {

@@ -90,7 +90,7 @@ public class VideoService extends Service implements NativeHelper.NativeDataList
     }
 
     public void setParameters(String ip, int videoPort, int videoBitrate, int encodeSpeed) {
-        Log.e(TAG, "setParameters");
+        Log.e(TAG, "VIDEO_DEBUG: setParameters called with IP=" + ip + ", port=" + videoPort);
         mip = ip;
         mvideoPort = videoPort;
         mvideoBitrate = videoBitrate;
@@ -118,10 +118,12 @@ public class VideoService extends Service implements NativeHelper.NativeDataList
     }
 
     private void initPacketizer(String ip, int videoPort, int videoBitrate, int encodeSpeed) {
-        Log.i(TAG, "Gst initPacketizer. ");
+        Log.i(TAG, "VIDEO_DEBUG: initPacketizer with IP=" + ip + ", port=" + videoPort);
 
         try {
-            mPacketizer.getRtpSocket().setDestination(InetAddress.getByName(ip), videoPort, videoPort);
+            InetAddress addr = InetAddress.getByName(ip);
+            Log.i(TAG, "VIDEO_DEBUG: Setting RTP destination to " + addr.getHostAddress() + ":" + videoPort);
+            mPacketizer.getRtpSocket().setDestination(addr, videoPort, videoPort);
         } catch (UnknownHostException e) {
             Log.e(TAG, "Error setting destination for RTP packetizer", e);
         }
@@ -156,6 +158,9 @@ public class VideoService extends Service implements NativeHelper.NativeDataList
     }
 
     protected void sendNAL(byte[] buffer) {
+        if (Math.random() < 0.001) { // Log very occasionally
+            Log.d(TAG, "VIDEO_DEBUG: sendNAL - sending NAL packet, size=" + buffer.length + " to packetizer");
+        }
         // Pack a single NAL for RTP and send
         if (mPacketizer != null) {
             mPacketizer.setInputStream(new ByteArrayInputStream(buffer));
@@ -165,6 +170,9 @@ public class VideoService extends Service implements NativeHelper.NativeDataList
 
     @Override
     public void onDataRecv(byte[] data, int size, int frameNum, boolean isKeyFrame, int width, int height) {
+        if (Math.random() < 0.01) { // Log occasionally
+            Log.d(TAG, "VIDEO_DEBUG: onDataRecv - got decoded frame, size=" + size + ", frame=" + frameNum + ", keyframe=" + isKeyFrame + ", " + width + "x" + height);
+        }
         if (size > 0 && isRunning) {
             // Pack the raw H.264 stream...
             try {

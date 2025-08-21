@@ -61,7 +61,7 @@ public class H264Packetizer extends AbstractPacketizer implements Runnable {
     }
 
     public void start() {
-        Log.d(TAG, "start()");
+        Log.d(TAG, "VIDEO_DEBUG: H264Packetizer.start() called");
         if (executorService != null) {
             executorService.submit(this);
         }

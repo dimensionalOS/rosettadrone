@@ -107,8 +107,8 @@
             tools:ignore="Instantiatable">
         </service>
 
-        <!--<service android:name="sq.rogue.rosettadrone.video.VideoService">
-        </service>-->
+        <service android:name="sq.rogue.rosettadrone.video.VideoService">
+        </service>
 
         <!-- DJI SDK needed also by emulator, this is a problem... -->
         <uses-library
