@@ -857,7 +857,6 @@ public class DroneModel implements CommonCallbacks.CompletionCallback {
         cancelMotion();
         cancelLanding();
         mAutonomy = false;
-        setVirtualSticksEnabled(false);  // Disable Virtual Sticks to return control to RC
     }
 
     void cancelLanding() {
@@ -2522,13 +2521,12 @@ public class DroneModel implements CommonCallbacks.CompletionCallback {
     }
 
     void setVirtualSticksEnabled(boolean setEnabled) {
-        // Only check timer when ENABLING Virtual Sticks, not when disabling
         if(setEnabled && System.currentTimeMillis() < timerIgnoreMavLink) return;
         mFlightController.setVirtualStickModeEnabled(setEnabled, djiError -> {
             if (djiError != null) {
                 Log.e(TAG, "setVirtualStickModeEnabled() failed (will retry): " + djiError.toString());
 
-                // Retry with the same value, not always true!
+                // Retry
                 setVirtualSticksEnabled(setEnabled);
 
             } else {

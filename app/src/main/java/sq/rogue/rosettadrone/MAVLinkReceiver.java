@@ -609,6 +609,11 @@ public class MAVLinkReceiver {
 
         } else if (flightMode == ArduCopterFlightModes.BRAKE) {
             mModel.cancelAllTasks();
+            mModel.setVirtualSticksEnabled(false);
+
+        } else if (flightMode == ArduCopterFlightModes.STABILIZE) {
+            mModel.cancelAllTasks();
+            mModel.setVirtualSticksEnabled(false);
 
         } else if (flightMode == ArduCopterFlightModes.RTL) {
             mModel.cancelAllTasks();
