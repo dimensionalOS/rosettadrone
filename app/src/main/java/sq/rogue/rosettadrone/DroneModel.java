@@ -315,7 +315,7 @@ public class DroneModel implements CommonCallbacks.CompletionCallback {
             mFlightController.setRollPitchCoordinateSystem(FlightCoordinateSystem.BODY);
 
             // Not supported by Mavic Mini, DJI Mini 2, DJI Mini SE and Mavic Air 2, DJI Air 2S, so we do it on our own.
-            mFlightController.setFlightOrientationMode(FlightOrientationMode.COURSE_LOCK, null);
+            // mFlightController.setFlightOrientationMode(FlightOrientationMode.COURSE_LOCK, null);  // Commented out to prevent random course lock mode
 
             if (isSimulator) {
                 parent.logMessageDJI("Starting Simulator...");
@@ -857,6 +857,7 @@ public class DroneModel implements CommonCallbacks.CompletionCallback {
         cancelMotion();
         cancelLanding();
         mAutonomy = false;
+        setVirtualSticksEnabled(false);  // Disable Virtual Sticks to return control to RC
     }
 
     void cancelLanding() {
@@ -2521,13 +2522,14 @@ public class DroneModel implements CommonCallbacks.CompletionCallback {
     }
 
     void setVirtualSticksEnabled(boolean setEnabled) {
-        if(System.currentTimeMillis() < timerIgnoreMavLink) return;
+        // Only check timer when ENABLING Virtual Sticks, not when disabling
+        if(setEnabled && System.currentTimeMillis() < timerIgnoreMavLink) return;
         mFlightController.setVirtualStickModeEnabled(setEnabled, djiError -> {
             if (djiError != null) {
                 Log.e(TAG, "setVirtualStickModeEnabled() failed (will retry): " + djiError.toString());
 
-                // Retry
-                setVirtualSticksEnabled(true);
+                // Retry with the same value, not always true!
+                setVirtualSticksEnabled(setEnabled);
 
             } else {
                 Log.i(TAG, "setVirtualStickModeEnabled() succeded");
